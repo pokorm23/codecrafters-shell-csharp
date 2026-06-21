@@ -4,6 +4,14 @@ using System.Threading.Channels;
 
 public static class Extensions
 {
+    extension<T>(IReadOnlyCollection<T> coll)
+    {
+        public string ToCollString()
+        {
+            return $"[{string.Join(", ", coll.Select(x => $"\"{x}\""))}]";
+        }
+    }
+
     extension(Process p)
     {
         public async IAsyncEnumerable<ProcessOutputLine> ReadAllLinesAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
