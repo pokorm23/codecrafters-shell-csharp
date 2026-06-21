@@ -99,7 +99,7 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
                     if (j == -1)
                     {
-                        j = jobs.Count;
+                        j = jobs.Count + 1;
                     }
 
                     var start = DateTime.Now;
