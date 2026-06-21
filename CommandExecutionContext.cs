@@ -5,15 +5,18 @@ namespace CodeCrafters.Shell;
 public enum RedirectionType
 {
     Override,
-    Append
+    Append,
 }
+
 public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
 {
     public bool IsHaltRequested { get; private set; }
 
     public required TextWriter StdOut { get; init; }
-    
-    public required TextWriter StdErr{ get; init; }
+
+    public required TextWriter StdErr { get; init; }
+
+    public required bool InBackground { get; init; }
 
     public Command? GetCommand(string command)
     {
@@ -40,37 +43,9 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
             return new PathFileCommand(c, async ctx =>
             {
-                var pwd = Environment.CurrentDirectory;
+               var p = await ProcessHelper.RunProcess(ctx.InBackground,c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
 
-                Environment.CurrentDirectory = c.DirectoryName!;
-
-                try
-                {
-                    using var process = Process.Start(new ProcessStartInfo(c.Name, ctx.Args)
-                    {
-                        UseShellExecute = false,
-                        RedirectStandardError = true,
-                        RedirectStandardOutput = true,
-                    });
-
-                    if (process is null)
-                    {
-                        return;
-                    }
-
-                    await foreach (var l in process.ReadAllLinesAsync(cancellationToken: ctx.CancellationToken))
-                    {
-                        var w = l.StandardError ? ctx.StdErr : ctx.StdOut;
-                        
-                        await w.WriteLineAsync(l.Content);
-                    }
-
-                    await process.WaitForExitAsync(ctx.CancellationToken);
-                }
-                finally
-                {
-                    Environment.CurrentDirectory = pwd;
-                }
+               await ctx.StdOut.WriteLineAsync($"[1] {p.Pid}");
             });
         }
 
@@ -88,6 +63,48 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
     public void Halt()
     {
         this.IsHaltRequested = true;
+    }
+}
+
+public record ProcessDescriptor(int? Pid);
+
+public static class ProcessHelper
+{
+    public static async Task<ProcessDescriptor> RunProcess(bool inBg,
+        FileInfo c,
+        string[] args,
+        TextWriter stdOut,
+        TextWriter stdErr,
+        CancellationToken cancellationToken)
+    {
+        using var process = Process.Start(new ProcessStartInfo(c.Name, args)
+        {
+            UseShellExecute = false,
+            WorkingDirectory = c.DirectoryName!,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+        });
+
+        if (process is null)
+        {
+            return new ProcessDescriptor(null);
+        }
+
+        await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
+        {
+            var w = l.StandardError ? stdErr : stdOut;
+
+            await w.WriteLineAsync(l.Content);
+        }
+
+        if (!inBg)
+        {
+            await process.WaitForExitAsync(cancellationToken);
+
+            return new ProcessDescriptor(null);
+        }
+
+        return new ProcessDescriptor(process.Id);
     }
 }
 
