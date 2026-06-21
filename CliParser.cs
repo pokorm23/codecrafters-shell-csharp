@@ -1,5 +1,7 @@
 using System.Text;
 
+namespace CodeCrafters.Shell;
+
 public static class CliParser
 {
     public const char TokenSplitChar = ' ';
@@ -38,12 +40,12 @@ public static class CliParser
             {
                 (quotes, var append) = (nextCharToEscape, quotes, c) switch
                 {
-                    (true, var q, _)           => (q, true),
+                    (true, var q, _)                  => (q, true),
                     (false, SingleQuote, SingleQuote) => (DefaultChar, false),
                     (false, DoubleQuote, DoubleQuote) => (DefaultChar, false),
                     (false, DefaultChar, SingleQuote) => (SingleQuote, false),
                     (false, DefaultChar, DoubleQuote) => (DoubleQuote, false),
-                    (false, var q, _)           => (q, true),
+                    (false, var q, _)                 => (q, true),
                 };
 
                 if (append)

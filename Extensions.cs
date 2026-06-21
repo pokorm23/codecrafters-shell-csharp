@@ -2,6 +2,8 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
+namespace CodeCrafters.Shell;
+
 public static class Extensions
 {
     extension<T>(IReadOnlyCollection<T> coll)
