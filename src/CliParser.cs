@@ -12,7 +12,7 @@ public static class CliParser
 
     private static IEnumerable<string> GetTokens(string line)
     {
-        var nextCharToEscape = true;
+        var nextCharToEscape = false;
         var quotes = DefaultChar;
         var b = new StringBuilder();
 
