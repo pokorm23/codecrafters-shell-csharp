@@ -84,7 +84,7 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
  
                 if (ctx.InBackground)
                 {
-                    var j = 1;
+                    var j = -1;
 
                     var jobs = BackgroundJobStorage.Jobs.Select(x => x.Key).Order().ToList();
 
@@ -95,6 +95,11 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
                             j = i + 1;
                             break;
                         }
+                    }
+
+                    if (j == -1)
+                    {
+                        j = jobs.Count;
                     }
 
                     var start = DateTime.Now;
