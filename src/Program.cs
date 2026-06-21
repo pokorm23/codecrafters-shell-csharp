@@ -16,7 +16,7 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
     }),
     new ("echo", ctx =>
     {
-        var echoLine = string.Join(" ", ctx.Args);
+        var echoLine = string.Join(" ", ctx.Args.Skip(1));
 
         Console.WriteLine(echoLine);
 
@@ -24,7 +24,7 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
     }),
     new ("type", ctx =>
     {
-        var what = ctx.Args.FirstOrDefault() ?? "";
+        var what = ctx.Args.Skip(1).FirstOrDefault() ?? "";
 
         var c = ctx.GetCommand(what);
 
@@ -59,7 +59,7 @@ while (!cts.Token.IsCancellationRequested)
 
     var arguments = userLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-    (var command, arguments) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
+    (var command, _) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
 
     var ctx = new CommandExecutionContext(arguments, wellKnownCommands);
 
