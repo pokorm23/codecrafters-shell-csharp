@@ -13,7 +13,7 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
         foreach (var d in FileSystemHelper.GetPathDirectories())
         {
-            var c = d.EnumerateFiles($"{command}.*").FirstOrDefault();
+            var c = d.EnumerateFiles($"{command}").FirstOrDefault();
 
             if (c is null)
             {
@@ -29,17 +29,23 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
             return new PathFileCommand(c, async ctx =>
             {
-                using var process = Process.Start(c.FullName, ctx.Args);
+                Environment.CurrentDirectory = c.DirectoryName!;
+                
+                using var process = Process.Start(c.Name, ctx.Args);
 
-                await foreach (var l in process.ReadAllLinesAsync())
+                /*await foreach (var l in process.ReadAllLinesAsync(cancellationToken: ctx.CancellationToken))
                 {
                     Console.WriteLine(l.Content);
-                }
+                }*/
+
+                await process.WaitForExitAsync(ctx.CancellationToken);
             });
         }
 
         return null;
     }
+
+    public required CancellationToken CancellationToken { get; init; }
 
 
     public Command? GetKnownCommand(string command)

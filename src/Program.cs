@@ -61,9 +61,12 @@ while (!cts.Token.IsCancellationRequested)
 
     (var command, arguments) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
 
-    var ctx = new CommandExecutionContext(arguments, wellKnownCommands);
+    var ctx = new CommandExecutionContext(arguments, wellKnownCommands)
+    {
+        CancellationToken = cts.Token,
+    };
 
-    var foundCommand = ctx.GetKnownCommand(command);
+    var foundCommand = ctx.GetCommand(command);
 
     if (foundCommand is null)
     {
@@ -79,4 +82,3 @@ while (!cts.Token.IsCancellationRequested)
         break;
     }
 }
-
