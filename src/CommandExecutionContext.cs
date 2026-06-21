@@ -1,8 +1,49 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Frozen;
+using System.Diagnostics;
 
+public enum RedirectionType
+{
+    Override,
+    Append
+}
 public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
 {
     public bool IsHaltRequested { get; private set; }
+    public required FrozenDictionary<int, (RedirectionType Type, string Target)> Redirections { get; init; }
+
+    public TextWriter StdOut
+    {
+        get
+        {
+            if (!Redirections.TryGetValue(1, out var t))
+            {
+                return Console.Out;
+            }
+
+            return new StreamWriter(File.Open(t.Target, t.Type switch
+            {
+                RedirectionType.Append => FileMode.Append,
+                _ => FileMode.Create,
+            }));
+        }
+    }
+    
+    public TextWriter StdErr
+    {
+        get
+        {
+            if (!Redirections.TryGetValue(2, out var t))
+            {
+                return Console.Error;
+            }
+
+            return new StreamWriter(File.Open(t.Target, t.Type switch
+            {
+                RedirectionType.Append => FileMode.Append,
+                _                      => FileMode.Create,
+            }));
+        }
+    }
 
     public Command? GetCommand(string command)
     {
@@ -35,12 +76,24 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
                 try
                 {
-                    using var process = Process.Start(c.Name, ctx.Args);
-
-                    /*await foreach (var l in process.ReadAllLinesAsync(cancellationToken: ctx.CancellationToken))
+                    using var process = Process.Start(new ProcessStartInfo(c.Name, ctx.Args)
                     {
-                        Console.WriteLine(l.Content);
-                    }*/
+                        UseShellExecute = false,
+                        RedirectStandardError = true,
+                        RedirectStandardOutput = true,
+                    });
+
+                    if (process is null)
+                    {
+                        return;
+                    }
+
+                    await foreach (var l in process.ReadAllLinesAsync(cancellationToken: ctx.CancellationToken))
+                    {
+                        var w = l.StandardError ? ctx.StdErr : ctx.StdOut;
+                        
+                        await w.WriteLineAsync(l.Content);
+                    }
 
                     await process.WaitForExitAsync(ctx.CancellationToken);
                 }
