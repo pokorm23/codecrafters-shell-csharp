@@ -18,7 +18,9 @@
                 continue;
             }
 
-            if (c.UnixFileMode.HasFlag(UnixFileMode.UserExecute))
+            if (c.UnixFileMode.HasFlag(UnixFileMode.GroupExecute)
+                || c.UnixFileMode.HasFlag(UnixFileMode.OtherExecute)
+                || c.UnixFileMode.HasFlag(UnixFileMode.UserExecute))
             {
                 continue;
             }
