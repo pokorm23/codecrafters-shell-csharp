@@ -18,11 +18,9 @@
                 continue;
             }
 
-            Console.WriteLine($"{c.UnixFileMode}");
-
-            if (c.UnixFileMode.HasFlag(UnixFileMode.GroupExecute)
+            if (!(c.UnixFileMode.HasFlag(UnixFileMode.GroupExecute)
                 || c.UnixFileMode.HasFlag(UnixFileMode.OtherExecute)
-                || c.UnixFileMode.HasFlag(UnixFileMode.UserExecute))
+                || c.UnixFileMode.HasFlag(UnixFileMode.UserExecute)))
             {
                 continue;
             }
