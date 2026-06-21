@@ -17,9 +17,9 @@ public record JobsCommand() : Command("jobs")
             var lastness = i == jobs.Count - 1
                                ? "+"
                                : i == jobs.Count - 2
-                                   ? "-" : "";
+                                   ? "-" : " ";
 
-            await ctx.StdOut.WriteLineAsync($"[{number}]{lastness} {status}{command.OriginalInput}");
+            await ctx.StdOut.WriteLineAsync($"[{number}]{lastness} {status}{command.OriginalInput.TrimEnd('&').Trim()}");
 
             if (exited)
             {
