@@ -26,7 +26,7 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
     {
         var what = ctx.Args.FirstOrDefault() ?? "";
 
-        var c = ctx.GetKnownCommand(what);
+        var c = ctx.GetCommand(what);
 
         if (c is null)
         {
