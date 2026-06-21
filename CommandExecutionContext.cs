@@ -103,6 +103,18 @@ public static class ProcessHelper
 
             return new ProcessDescriptor(null);
         }
+        else
+        {
+            _ = Task.Run(async () =>
+            {
+                await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
+                {
+                    var w = l.StandardError ? stdErr : stdOut;
+
+                    await w.WriteLineAsync(l.Content);
+                }
+            }, cancellationToken);
+        }
 
         return new ProcessDescriptor(process.Id);
     }
