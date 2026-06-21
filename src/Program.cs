@@ -57,6 +57,12 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
     {
         var path = ctx.Args.FirstOrDefault() ?? "";
 
+        if (path.StartsWith("~"))
+        {
+            var home = Environment.GetEnvironmentVariable("HOME") ?? "";
+            path = $"{home}{path}";
+        }
+
         if (!Directory.Exists(path))
         {
             Console.WriteLine($"cd: {path}: No such file or directory");
@@ -79,7 +85,7 @@ while (!cts.Token.IsCancellationRequested)
 
     var arguments = userLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-    (var command, arguments) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
+    (var command, arguments) = arguments is [var c, ..var a] ? (c, a.Select(x => x.Trim()).ToArray()) : (string.Empty, []);
 
     var ctx = new CommandExecutionContext(arguments, wellKnownCommands)
     {
