@@ -60,7 +60,7 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
         if (path.StartsWith("~"))
         {
             var home = Environment.GetEnvironmentVariable("HOME") ?? "";
-            path = $"{home}{path}";
+            path = $"{home}{path[1..]}";
         }
 
         if (!Directory.Exists(path))
@@ -83,9 +83,9 @@ while (!cts.Token.IsCancellationRequested)
 
     userLine = userLine?.Trim() ?? string.Empty;
 
-    var arguments = userLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    var arguments = userLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    (var command, arguments) = arguments is [var c, ..var a] ? (c, a.Select(x => x.Trim()).ToArray()) : (string.Empty, []);
+    (var command, arguments) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
 
     var ctx = new CommandExecutionContext(arguments, wellKnownCommands)
     {
