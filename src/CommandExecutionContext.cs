@@ -18,7 +18,7 @@
                 continue;
             }
 
-            if (c.IsReadOnly)
+            if (c.UnixFileMode.HasFlag(UnixFileMode.UserExecute))
             {
                 continue;
             }
