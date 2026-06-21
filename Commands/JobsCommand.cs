@@ -6,13 +6,13 @@ public record JobsCommand() : Command("jobs")
     {
         var jobs = BackgroundJobStorage.Jobs.ToDictionary();
 
-        foreach (var (number,command) in jobs.Order())
+        foreach (var (i,(number,command)) in jobs.Order().Index())
         {
             var status = $" Running".PadRight(24, ' ');
 
-            var lastness = number == jobs.Count - 1
+            var lastness = i == jobs.Count - 1
                                ? "+"
-                               : number == jobs.Count - 2
+                               : i == jobs.Count - 2
                                    ? "-" : "";
 
             await ctx.StdOut.WriteLineAsync($"[{number}]{lastness} {status}{command.OriginalInput}");
