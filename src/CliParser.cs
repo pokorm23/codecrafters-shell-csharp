@@ -18,7 +18,7 @@ public static class CliParser
 
         foreach (var c in line)
         {
-            if (c == EscapeChar && c is not SingleQuote)
+            if (c == EscapeChar && quotes is not SingleQuote)
             {
                 if (!nextCharToEscape)
                 {
