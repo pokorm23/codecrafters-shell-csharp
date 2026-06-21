@@ -165,7 +165,17 @@ public static class ProcessHelper
             }
         }, cancellationToken);
 
-        return new ProcessDescriptor(() => process.Id, process.WaitForExitAsync(cancellationToken), () => process.HasExited);
+        return new ProcessDescriptor(() => process.Id, process.WaitForExitAsync(cancellationToken), () =>
+        {
+            try
+            {
+                return process.HasExited;
+            }
+            catch
+            {
+                return true;
+            }
+        });
     }
 }
 
