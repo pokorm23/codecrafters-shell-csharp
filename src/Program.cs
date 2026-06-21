@@ -6,15 +6,15 @@ Console.CancelKeyPress += (sender, e) =>
     cts.Cancel();
 };
 
-var commands = new List<Command>
+var wellKnownCommands = new List<ShellBuiltinCommand>
 {
-    new ("exit", CommandType.ShellBuilin, ctx =>
+    new ("exit", ctx =>
     {
         ctx.Halt();
 
         return Task.CompletedTask;
     }),
-    new ("echo", CommandType.ShellBuilin, ctx =>
+    new ("echo", ctx =>
     {
         var echoLine = string.Join(" ", ctx.Args);
 
@@ -22,19 +22,27 @@ var commands = new List<Command>
 
         return Task.CompletedTask;
     }),
-    new ("type", CommandType.ShellBuilin, ctx =>
+    new ("type", ctx =>
     {
         var what = ctx.Args.FirstOrDefault() ?? "";
 
-        var c = ctx.GetCommand(what);
+        var c = ctx.GetKnownCommand(what);
 
         if (c is null)
         {
             Console.WriteLine($"{what}: not found");
         }
+        else if (c is ShellBuiltinCommand)
+        {
+            Console.WriteLine($"{what} is a shell builtin");
+        }
+        else if (c is PathFileCommand pf)
+        {
+            Console.WriteLine($"{what} is {pf.File.FullName}");
+        }
         else
         {
-            Console.WriteLine(c.Type.GetDescription(what));
+            throw new NotImplementedException();
         }
 
         return Task.CompletedTask;
@@ -53,9 +61,9 @@ while (!cts.Token.IsCancellationRequested)
 
     (var command, arguments) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
 
-    var ctx = new CommandExecutionContext(arguments, commands);
+    var ctx = new CommandExecutionContext(arguments, wellKnownCommands);
 
-    var foundCommand = ctx.GetCommand(command);
+    var foundCommand = ctx.GetKnownCommand(command);
 
     if (foundCommand is null)
     {
@@ -72,35 +80,3 @@ while (!cts.Token.IsCancellationRequested)
     }
 }
 
-public record Command(string CommandName, CommandType Type, Func<CommandExecutionContext, Task> Callback);
-
-public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
-{
-    public bool IsHaltRequested { get; private set; }
-
-    public Command? GetCommand(string command)
-    {
-        return this.AllCommands.FirstOrDefault(x => command.Equals(x.CommandName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public void Halt()
-    {
-        this.IsHaltRequested = true;
-    }
-}
-
-public enum CommandType
-{
-    ShellBuilin,
-}
-
-public static class DescriptionExtensions
-{
-    extension(CommandType type)
-    {
-        public string GetDescription(string command) => type switch
-        {
-            CommandType.ShellBuilin => $"{command} is a shell builtin",
-        };
-    }
-}
