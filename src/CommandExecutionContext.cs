@@ -1,4 +1,6 @@
-﻿public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
+﻿using System.Diagnostics;
+
+public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
 {
     public bool IsHaltRequested { get; private set; }
 
@@ -25,11 +27,14 @@
                 continue;
             }
 
-            return new PathFileCommand(c, ctx =>
+            return new PathFileCommand(c, async ctx =>
             {
-                // TODO
+                using var process = Process.Start(c.FullName, ctx.Args);
 
-                return Task.CompletedTask;
+                await foreach (var l in process.ReadAllLinesAsync())
+                {
+                    Console.WriteLine(l.Content);
+                }
             });
         }
 
