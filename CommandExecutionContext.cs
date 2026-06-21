@@ -11,7 +11,8 @@ public enum RedirectionType
 
 public static class BackgroundJobStorage
 {
-    public static ConcurrentDictionary<CliRawCommand, bool> Jobs { get; } = [];
+    public static int CurrentJobNumber;
+    public static ConcurrentDictionary<int, CliRawCommand> Jobs { get; } = [];
 }
 
 public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
@@ -53,16 +54,19 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
  
                 if (ctx.InBackground)
                 {
-                    await ctx.StdOut.WriteLineAsync($"[1] {p.Pid()}");
+                    var j = Interlocked.Increment(ref BackgroundJobStorage.CurrentJobNumber);
+                    var start = DateTime.Now;
+
+                    await ctx.StdOut.WriteLineAsync($"[{j}] {p.Pid()}");
 
                     _ = Task.Run(async () =>
                     {
                         await p.ExitTask;
 
-                        BackgroundJobStorage.Jobs.TryRemove(ctx.RawCommand, out var _);
+                        BackgroundJobStorage.Jobs.TryRemove(j, out var _);
                     }, this.CancellationToken);
 
-                    BackgroundJobStorage.Jobs.TryAdd(ctx.RawCommand, true);
+                    BackgroundJobStorage.Jobs.TryAdd(j, ctx.RawCommand);
                 }
             });
         }
