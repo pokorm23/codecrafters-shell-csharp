@@ -5,18 +5,32 @@ public static class CliParser
     public const char TokenSplitChar = ' ';
     public const char SingleQuote = '\'';
     public const char DoubleQuote = '"';
+    public const char EscapeChar = '\\';
     public const char DefaultChar = '\0';
 
-    public static string[] GetArgs(string line) => GetTokens(line).Select(Unquote).ToArray();
+    public static string[] GetArgs(string line) => GetTokens(line).ToArray();
 
     private static IEnumerable<string> GetTokens(string line)
     {
+        var nextCharToEscape = true;
         var quotes = DefaultChar;
         var b = new StringBuilder();
 
         foreach (var c in line)
         {
-            if (c == TokenSplitChar && quotes == DefaultChar)
+            if (c == EscapeChar)
+            {
+                if (!nextCharToEscape)
+                {
+                    nextCharToEscape = true;
+                }
+                else
+                {
+                    b.Append(c);
+                }
+            }
+            // space as token breaker
+            else if (!nextCharToEscape && c == TokenSplitChar && quotes == DefaultChar)
             {
                 if (b.Length == 0)
                 {
@@ -29,16 +43,25 @@ public static class CliParser
             }
             else
             {
-                b.Append(c);
-
-                quotes = (quotes, c) switch
+                (quotes, var append) = (nextCharToEscape, quotes, c) switch
                 {
-                    (SingleQuote, SingleQuote) => DefaultChar,
-                    (DoubleQuote, DoubleQuote) => DefaultChar,
-                    (DefaultChar, SingleQuote) => SingleQuote,
-                    (DefaultChar, DoubleQuote) => DoubleQuote,
-                    var (q, _)                 => q,
+                    (true, var q, _)           => (q, true),
+                    (false, SingleQuote, SingleQuote) => (DefaultChar, false),
+                    (false, DoubleQuote, DoubleQuote) => (DefaultChar, false),
+                    (false, DefaultChar, SingleQuote) => (SingleQuote, false),
+                    (false, DefaultChar, DoubleQuote) => (DoubleQuote, false),
+                    (false, var q, _)           => (q, true),
                 };
+
+                if (append)
+                {
+                    b.Append(c);
+                }
+
+                if (nextCharToEscape)
+                {
+                    nextCharToEscape = false;
+                }
             }
         }
 
@@ -46,30 +69,5 @@ public static class CliParser
         {
             yield return b.ToString();
         }
-    }
-
-    private static string Unquote(string token)
-    {
-        var quotes = DefaultChar;
-        var b = new StringBuilder();
-
-        foreach (var c in token)
-        {
-            (quotes, var append) = (quotes, c) switch
-            {
-                (SingleQuote, SingleQuote) => (DefaultChar, false),
-                (DoubleQuote, DoubleQuote) => (DefaultChar, false),
-                (DefaultChar, SingleQuote) => (SingleQuote, false),
-                (DefaultChar, DoubleQuote) => (DoubleQuote, false),
-                var (q, _)                 => (q, true),
-            };
-
-            if (append)
-            {
-                b.Append(c);
-            }
-        }
-
-        return b.ToString();
     }
 }
