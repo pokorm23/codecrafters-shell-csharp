@@ -7,6 +7,7 @@ public enum RedirectionType
 {
     Override,
     Append,
+    Pipe,
 }
 
 public static class BackgroundJobStorage
@@ -47,6 +48,7 @@ public static class BackgroundJobStorage
 
 public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
 {
+    public TextWriter? StdIn { get; private set; }
     public bool IsHaltRequested { get; private set; }
 
     public required TextWriter StdOut { get; init; }
@@ -54,6 +56,8 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
     public required TextWriter StdErr { get; init; }
 
     public required bool InBackground { get; init; }
+
+    public required bool DeferedInput { get; init; }
 
     public Command? GetCommand(string command)
     {
@@ -80,7 +84,19 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
             return new PathFileCommand(c, async ctx =>
             {
-                var p = await ProcessHelper.RunProcess(ctx.InBackground, c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
+                var p = await ProcessHelper.RunProcess(ctx.InBackground || ctx.DeferedInput, c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
+
+                if (ctx.DeferedInput)
+                {
+                    if (p.StdIn() is { } i)
+                    {
+                        ctx.SetStdIn(i);
+                    }
+                    else
+                    {
+                        throw new Exception("unable to get std in");
+                    }
+                }
  
                 if (ctx.InBackground)
                 {
@@ -121,6 +137,11 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
         return null;
     }
 
+    private void SetStdIn(TextWriter textWriter)
+    {
+        StdIn = textWriter;
+    }
+
     public required CliRawCommand RawCommand { get; set; }
 
     public required CancellationToken CancellationToken { get; init; }
@@ -137,7 +158,7 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
     }
 }
 
-public record ProcessDescriptor(Func<int?> Pid, Task ExitTask, Func<bool> Exited);
+public record ProcessDescriptor(Func<int?> Pid, Task ExitTask, Func<bool> Exited, Func<TextWriter?> StdIn);
 
 public static class ProcessHelper
 {
@@ -158,7 +179,7 @@ public static class ProcessHelper
 
         if (process is null)
         {
-            return new ProcessDescriptor(() => null, Task.CompletedTask, () => true);
+            return new ProcessDescriptor(() => null, Task.CompletedTask, () => true, () => null);
         }
 
         if (!inBg)
@@ -191,7 +212,7 @@ public static class ProcessHelper
                 process.Dispose();
             }
 
-            return new ProcessDescriptor(() => null, Task.CompletedTask, () => true);
+            return new ProcessDescriptor(() => null, Task.CompletedTask, () => true, () => null);
         }
 
         _ = Task.Run(async () =>
@@ -221,6 +242,16 @@ public static class ProcessHelper
             catch
             {
                 return true;
+            }
+        }, () =>
+        {
+            try
+            {
+                return process.StandardInput;
+            }
+            catch
+            {
+                return null;
             }
         });
     }
