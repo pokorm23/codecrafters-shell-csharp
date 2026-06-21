@@ -4,11 +4,18 @@ public record JobsCommand() : Command("jobs")
 {
     public override async Task Handle(CommandExecutionContext ctx)
     {
-        foreach (var (command,_) in BackgroundJobStorage.Jobs)
+        var jobs = BackgroundJobStorage.Jobs.ToDictionary();
+
+        foreach (var (number,command) in jobs.Order())
         {
             var status = $" Running".PadRight(24, ' ');
 
-            await ctx.StdOut.WriteLineAsync($"[1]+ {status}{command.OriginalInput}");
+            var lastness = number == jobs.Count - 1
+                               ? "+"
+                               : number == jobs.Count - 2
+                                   ? "-" : "";
+
+            await ctx.StdOut.WriteLineAsync($"[{number}]{lastness} {status}{command.OriginalInput}");
         }
     }
 }
