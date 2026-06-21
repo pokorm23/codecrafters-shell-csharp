@@ -22,12 +22,6 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
 
         return Task.CompletedTask;
     }),
-    new ("pwd", ctx =>
-    {
-        Console.WriteLine(Environment.CurrentDirectory);
-
-        return Task.CompletedTask;
-    }),
     new ("type", ctx =>
     {
         var what = ctx.Args.FirstOrDefault() ?? "";
@@ -50,6 +44,22 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
         {
             throw new NotImplementedException();
         }
+
+        return Task.CompletedTask;
+    }),
+    new ("pwd", ctx =>
+    {
+        Console.WriteLine(Environment.CurrentDirectory);
+
+        return Task.CompletedTask;
+    }),
+    new ("cd", ctx =>
+    {
+        var path = ctx.Args.FirstOrDefault() ?? "";
+        
+        
+
+        Environment.CurrentDirectory = path;
 
         return Task.CompletedTask;
     }),
