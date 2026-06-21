@@ -63,7 +63,7 @@ while (!cts.Token.IsCancellationRequested)
 
     var ctx = new CommandExecutionContext(arguments, wellKnownCommands);
 
-    var foundCommand = ctx.GetKnownCommand(command);
+    var foundCommand = ctx.GetCommand(command);
 
     if (foundCommand is null)
     {
