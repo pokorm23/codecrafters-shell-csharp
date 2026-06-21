@@ -18,16 +18,9 @@ public static class CliParser
 
         foreach (var c in line)
         {
-            if (c == EscapeChar && quotes is not SingleQuote)
+            if (c == EscapeChar && !nextCharToEscape && quotes is not SingleQuote)
             {
-                if (!nextCharToEscape)
-                {
-                    nextCharToEscape = true;
-                }
-                else
-                {
-                    b.Append(c);
-                }
+                nextCharToEscape = true;
             }
             // space as token breaker
             else if (!nextCharToEscape && c == TokenSplitChar && quotes == DefaultChar)
