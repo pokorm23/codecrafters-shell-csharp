@@ -100,7 +100,7 @@ public static class DescriptionExtensions
     {
         public string GetDescription(string command) => type switch
         {
-            CommandType.ShellBuilin => $"{command} is a shell buildin",
+            CommandType.ShellBuilin => $"{command} is a shell builtin",
         };
     }
 }
