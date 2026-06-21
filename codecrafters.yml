@@ -8,4 +8,4 @@ debug: false
 # on Codecrafters.
 #
 # Available versions: dotnet-10.0
-buildpack: dotnet-11.0
+buildpack: dotnet-10.0
