@@ -2,7 +2,10 @@ using System.Text.RegularExpressions;
 
 namespace CodeCrafters.Shell;
 
-public record CliRawCommand(string Command, string[] Args, Dictionary<int, (RedirectionType Type, string Target)> Redirections, bool IsBackground) { }
+public record CliRawCommand(string Command, string[] Args, Dictionary<int, (RedirectionType Type, string Target)> Redirections, bool IsBackground)
+{
+    public required string OriginalInput { get; init; }
+}
 
 public static partial class CliCommandParser
 {
@@ -87,7 +90,10 @@ public static partial class CliCommandParser
                                     .Select(x => (x.Key, (x.Value.Type, Target: x.Value.Target ?? throw new Exception($"Missing target for redirection {x.Key} in {allArgs.ToCollString()}"))))
                                     .ToDictionary();
 
-        return new CliRawCommand(command, arguments.ToArray(), validatedRedirections, isBg);
+        return new CliRawCommand(command, arguments.ToArray(), validatedRedirections, isBg)
+        {
+            OriginalInput = string.Join(CliTokenParser.TokenSplitChar, allArgs),
+        };
     }
 
     [GeneratedRegex(@"^(?<r>\d*)(?<t>>|>>)$")]

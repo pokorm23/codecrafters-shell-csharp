@@ -80,6 +80,7 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, 
 
         var ctx = new CommandExecutionContext(rawCommand.Args.ToArray(), GetWellKnownCommands())
         {
+            RawCommand = rawCommand,
             CancellationToken = cancellationToken,
             StdOut = stdOut ?? Console.Out,
             StdErr = stdErr ?? Console.Error,
