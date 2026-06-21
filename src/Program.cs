@@ -1,3 +1,6 @@
+using System.Collections.Frozen;
+using System.Text.RegularExpressions;
+
 var cts = new CancellationTokenSource();
 
 Console.CancelKeyPress += (sender, e) =>
@@ -14,15 +17,13 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
 
         return Task.CompletedTask;
     }),
-    new ("echo", ctx =>
+    new ("echo", async ctx =>
     {
         var echoLine = string.Join(" ", ctx.Args);
 
-        Console.WriteLine(echoLine);
-
-        return Task.CompletedTask;
+        await ctx.StdOut.WriteLineAsync(echoLine);
     }),
-    new ("type", ctx =>
+    new ("type", async ctx =>
     {
         var what = ctx.Args.FirstOrDefault() ?? "";
 
@@ -30,30 +31,26 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
 
         if (c is null)
         {
-            Console.WriteLine($"{what}: not found");
+            await ctx.StdOut.WriteLineAsync($"{what}: not found");
         }
         else if (c is ShellBuiltinCommand)
         {
-            Console.WriteLine($"{what} is a shell builtin");
+            await ctx.StdOut.WriteLineAsync($"{what} is a shell builtin");
         }
         else if (c is PathFileCommand pf)
         {
-            Console.WriteLine($"{what} is {pf.File.FullName}");
+            await ctx.StdOut.WriteLineAsync($"{what} is {pf.File.FullName}");
         }
         else
         {
             throw new NotImplementedException();
         }
-
-        return Task.CompletedTask;
     }),
-    new ("pwd", ctx =>
+    new ("pwd", async ctx =>
     {
-        Console.WriteLine(Environment.CurrentDirectory);
-
-        return Task.CompletedTask;
+        await ctx.StdOut.WriteLineAsync(Environment.CurrentDirectory);
     }),
-    new ("cd", ctx =>
+    new ("cd", async ctx =>
     {
         var path = ctx.Args.FirstOrDefault() ?? "";
 
@@ -65,13 +62,12 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
 
         if (!Directory.Exists(path))
         {
-            Console.WriteLine($"cd: {path}: No such file or directory");
-            return Task.CompletedTask;
+            await ctx.StdOut.WriteLineAsync($"cd: {path}: No such file or directory");
+
+            return;
         }
 
         Environment.CurrentDirectory = path;
-
-        return Task.CompletedTask;
     }),
 };
 
@@ -83,30 +79,163 @@ while (!cts.Token.IsCancellationRequested)
 
     userLine = userLine?.Trim() ?? string.Empty;
 
-    var arguments = CliParser.GetArgs(userLine);
+    var allParsedArguments = CliParser.GetArgs(userLine);
 
-    //Console.WriteLine($"[{string.Join(", ", arguments.Select(x => $"\"{x}\""))}]");
+    var argumentGroups = new List<(string? PipeOperator, string[] Args)>();
+    var capture = new List<string>();
+    var pipe = default(string);
 
-    (var command, arguments) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
-
-    var ctx = new CommandExecutionContext(arguments, wellKnownCommands)
+    void CommitCapture()
     {
-        CancellationToken = cts.Token,
-    };
-
-    var foundCommand = ctx.GetCommand(command);
-
-    if (foundCommand is null)
-    {
-        Console.WriteLine($"{command}: command not found");
-
-        continue;
+        argumentGroups.Add((pipe, capture.ToArray()));
+        capture.Clear();
     }
 
-    await foundCommand.Callback(ctx);
-
-    if (ctx.IsHaltRequested)
+    foreach (var argument in allParsedArguments)
     {
-        break;
+        if (argument is "||" or "&&" or ";" or "|")
+        {
+            CommitCapture();
+            pipe = argument;
+        }
+        else
+        {
+            capture.Add(argument);
+        }
     }
+
+    CommitCapture();
+
+
+    foreach (var (_, allArgs) in argumentGroups)
+    {
+        try
+        {
+            if (allArgs.Length is 0)
+            {
+                throw new Exception("not enought arguments");
+            }
+
+            var command = "";
+            var arguments = new List<string>();
+            var redirections = new Dictionary<int, (RedirectionType Type, string? Target)>();
+            var locatingTarget = default(int?);
+
+            foreach (var (i, a) in allArgs.Index())
+            {
+                if (i == 0)
+                {
+                    command = a;
+
+                    continue;
+                }
+
+                if (RedirectionPart().Match(a) is {Success: true} m)
+                {
+                    if (locatingTarget.HasValue)
+                    {
+                        throw new Exception("missing target for previous redirect");
+                    }
+
+                    var (gr, gt) = (m.Groups["r"].Value, m.Groups["t"].Value);
+
+                    var (n, t) = (string.IsNullOrWhiteSpace(gr) ? 1 : int.Parse(gr), gt switch
+                                     {
+                                         ">"   => RedirectionType.Override,
+                                         ">>"  => RedirectionType.Append,
+                                         var _ => throw new Exception($"Unknown redirect type {gt}"),
+                                     });
+
+                    if (!redirections.TryAdd(n, (t, null)))
+                    {
+                        throw new Exception($"Multiple redirection for {n} in command {allArgs.ToCollString()}");
+                    }
+
+                    locatingTarget = n;
+
+                    continue;
+                }
+
+                if (locatingTarget is { } r)
+                {
+                    redirections[r] = (redirections[r].Type, a);
+
+                    locatingTarget = null;
+
+                    continue;
+                }
+
+                if (locatingTarget.HasValue)
+                {
+                    throw new Exception("missing target for previous redirect");
+                }
+
+                arguments.Add(a);
+            }
+
+            var validatedRedirections = redirections
+                                        .Select(x => (x.Key, (x.Value.Type, Target: x.Value.Target ?? throw new Exception($"Missing target for redirection {x.Key} in {allArgs.ToCollString()}"))))
+                                        .ToDictionary();
+
+            TextWriter? stdOut = null;
+
+            if (validatedRedirections.TryGetValue(1, out var re))
+            {
+                stdOut = new StreamWriter(File.Open(re.Target, re.Type switch
+                {
+                    RedirectionType.Append => FileMode.Append,
+                    _                      => FileMode.Create,
+                }, FileAccess.Write));
+            }
+            
+            TextWriter? stdErr = null;
+
+            if (validatedRedirections.TryGetValue(2, out var se))
+            {
+                stdErr = new StreamWriter(File.Open(se.Target, se.Type switch
+                {
+                    RedirectionType.Append => FileMode.Append,
+                    _                      => FileMode.Create,
+                }, FileAccess.Write));
+            }
+
+            var ctx = new CommandExecutionContext(arguments.ToArray(), wellKnownCommands)
+            {
+                CancellationToken = cts.Token,
+                StdOut = stdOut ?? Console.Out,
+                StdErr = stdErr ?? Console.Error,
+            };
+
+            var foundCommand = ctx.GetCommand(command);
+
+            if (foundCommand is null)
+            {
+                await ctx.StdOut.WriteLineAsync($"{command}: command not found");
+
+                continue;
+            }
+
+            await foundCommand.Callback(ctx);
+
+            await (stdOut?.DisposeAsync() ?? ValueTask.CompletedTask);
+            await (stdErr?.DisposeAsync() ?? ValueTask.CompletedTask);
+
+            if (ctx.IsHaltRequested)
+            {
+                return;
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error while parsing {allArgs.ToCollString()}: {e.Message}");
+
+            throw;
+        }
+    }
+}
+
+internal partial class Program
+{
+    [GeneratedRegex(@"(?<r>\d*)(?<t>>|>>)")]
+    private static partial Regex RedirectionPart();
 }
