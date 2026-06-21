@@ -71,41 +71,83 @@ public record ProcessDescriptor(int? Pid);
 
 public static class ProcessHelper
 {
-    public static async Task<ProcessDescriptor> RunProcess(bool inBg,
-        FileInfo c,
-        string[] args,
-        TextWriter stdOut,
-        TextWriter stdErr,
-        CancellationToken cancellationToken)
+   public static async Task<ProcessDescriptor> RunProcess(bool inBg,
+    FileInfo c,
+    string[] args,
+    TextWriter stdOut,
+    TextWriter stdErr,
+    CancellationToken cancellationToken)
+{
+    // Removed 'using var' to prevent premature disposal for background tasks.
+    var process = Process.Start(new ProcessStartInfo(c.Name, args)
     {
-        using var process = Process.Start(new ProcessStartInfo(c.Name, args)
-        {
-            UseShellExecute = false,
-            WorkingDirectory = c.DirectoryName!,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        });
+        UseShellExecute = false,
+        WorkingDirectory = c.DirectoryName!,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+    });
 
-        if (process is null)
+    if (process is null)
+    {
+        return new ProcessDescriptor(null);
+    }
+
+    // Register cancellation to actually kill the OS process, not just stop awaiting it
+    var ctr = cancellationToken.Register(() => 
+    {
+        if (!process.HasExited) 
         {
-            return new ProcessDescriptor(null);
+            try { process.Kill(); } catch { /* Ignore if it just exited */ }
         }
+    });
 
-        if (!inBg)
+    if (!inBg)
+    {
+        try
         {
             await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
             {
                 var w = l.StandardError ? stdErr : stdOut;
-
                 await w.WriteLineAsync(l.Content);
             }
             await process.WaitForExitAsync(cancellationToken);
-
-            return new ProcessDescriptor(null);
+        }
+        finally
+        {
+            await ctr.DisposeAsync();
+            process.Dispose(); // Safe to dispose here since it ran synchronously
         }
 
-        return new ProcessDescriptor(process.Id);
+        return new ProcessDescriptor(null);
     }
+
+    // Background execution
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
+            {
+                var w = l.StandardError ? stdErr : stdOut;
+                await w.WriteLineAsync(l.Content);
+            }
+            
+            // Wait for it to actually finish before disposing
+            await process.WaitForExitAsync(cancellationToken); 
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected if canceled, process was killed by the registered callback
+        }
+        finally
+        {
+            await ctr.DisposeAsync();
+            process.Dispose(); // Transfer ownership of disposal to the background task
+        }
+    }, cancellationToken);
+
+    return new ProcessDescriptor(process.Id);
+}
 }
 
 public static class FileSystemHelper
