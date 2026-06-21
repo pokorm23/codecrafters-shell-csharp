@@ -21,26 +21,48 @@ while (!cts.Token.IsCancellationRequested)
 
     var allParsedArguments = CliTokenParser.GetTokens(userLine);
 
-    foreach (var (_, allArgs) in CliPipeParser.GetCommands(allParsedArguments.ToArray()))
+    foreach (var (_, allArgs) in CliPipeParser.GetCommandGroups(allParsedArguments.ToArray()))
     {
-        CliRawCommand rawCommand;
+        CommandExecutionContext? pipePrevContext = null;
 
-        try
+        var pipe = CliPipeParser.GetCommandPipe(allArgs);
+
+        var isPipe = pipe.Count > 1;
+        
+        foreach (var (i, arguments) in pipe.Index().Reverse())
         {
-            rawCommand = CliCommandParser.ParseCommand(allArgs);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Error while parsing {allArgs.ToCollString()}: {e.Message}");
+            CliRawCommand rawCommand;
 
-            throw;
-        }
+            try
+            {
+                rawCommand = CliCommandParser.ParseCommand(arguments);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error while parsing {arguments.ToCollString()}: {e.Message}");
 
-        var ctx = await RunCommand(rawCommand, cts.Token);
+                throw;
+            }
+            
+            CommandExecutionContext ctx;
+            
+            // if is pipe
+            if (i > 0)
+            {
+                ctx = await RunCommand(rawCommand, cts.Token);
+            }
+            else
+            {
+                ctx = await RunCommand(rawCommand, cts.Token);
+            }
 
-        if (ctx.IsHaltRequested)
-        {
-            return;
+
+            if (ctx.IsHaltRequested)
+            {
+                return;
+            }
+
+            pipePrevContext = ctx;
         }
     }
 }
@@ -55,7 +77,7 @@ static List<Command> GetWellKnownCommands() => new ()
     new JobsCommand(),
 };
 
-static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, CancellationToken cancellationToken)
+static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, TextWriter? nextStdOut,TextReader? previousStdIn, CancellationToken cancellationToken)
 {
     TextWriter? stdOut = null;
     TextWriter? stdErr = null;
@@ -64,19 +86,28 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, 
     {
         if (rawCommand.Redirections.TryGetValue(1, out var re))
         {
-            stdOut = new StreamWriter(File.Open(re.Target, re.Type switch
+            if (re.Type == RedirectionType.Pipe)
             {
-                RedirectionType.Append => FileMode.Append,
-                var _                  => FileMode.Create,
-            }, FileAccess.Write));
+                stdOut = nextStdOut;
+            }
+            else
+            {
+                stdOut = new StreamWriter(File.Open(re.Target, re.Type switch
+                {
+                    RedirectionType.Append   => FileMode.Append,
+                    RedirectionType.Override => FileMode.Create,
+                    var _                    => throw new ArgumentOutOfRangeException(),
+                }, FileAccess.Write));
+            }
         }
 
         if (rawCommand.Redirections.TryGetValue(2, out var se))
         {
             stdErr = new StreamWriter(File.Open(se.Target, se.Type switch
             {
-                RedirectionType.Append => FileMode.Append,
-                var _                  => FileMode.Create,
+                RedirectionType.Append   => FileMode.Append,
+                RedirectionType.Override => FileMode.Create,
+                _                        => throw new ArgumentOutOfRangeException()
             }, FileAccess.Write));
         }
 
