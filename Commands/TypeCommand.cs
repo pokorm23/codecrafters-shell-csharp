@@ -1,6 +1,6 @@
 ﻿namespace CodeCrafters.Shell.Commands;
 
-public record TypeCommand() : Command("exit")
+public record TypeCommand() : Command("type")
 {
     public override async Task Handle(CommandExecutionContext ctx)
     {
