@@ -236,6 +236,6 @@ while (!cts.Token.IsCancellationRequested)
 
 internal partial class Program
 {
-    [GeneratedRegex(@"(?<r>\d*)(?<t>>|>>)")]
+    [GeneratedRegex(@"^(?<r>\d*)(?<t>>|>>)$")]
     private static partial Regex RedirectionPart();
 }
