@@ -11,7 +11,7 @@
 
         foreach (var d in FileSystemHelper.GetPathDirectories())
         {
-            var c = d.EnumerateFiles($"{command}.*").FirstOrDefault();
+            var c = d.EnumerateFiles($"{command}").FirstOrDefault();
 
             if (c is null)
             {
