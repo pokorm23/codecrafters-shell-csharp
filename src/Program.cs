@@ -22,6 +22,12 @@ var wellKnownCommands = new List<ShellBuiltinCommand>
 
         return Task.CompletedTask;
     }),
+    new ("pwd", ctx =>
+    {
+        Console.WriteLine(Environment.CurrentDirectory);
+
+        return Task.CompletedTask;
+    }),
     new ("type", ctx =>
     {
         var what = ctx.Args.FirstOrDefault() ?? "";
