@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace CodeCrafters.Shell;
 
@@ -6,6 +7,11 @@ public enum RedirectionType
 {
     Override,
     Append,
+}
+
+public static class BackgroundJobStorage
+{
+    public static ConcurrentDictionary<CliRawCommand, bool> Jobs { get; } = [];
 }
 
 public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
@@ -43,15 +49,28 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
             return new PathFileCommand(c, async ctx =>
             {
-               var p = await ProcessHelper.RunProcess(ctx.InBackground,c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
+                var p = await ProcessHelper.RunProcess(ctx.InBackground, c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
 
-               if (ctx.InBackground)
-               await ctx.StdOut.WriteLineAsync($"[1] {p.Pid}");
+                if (ctx.InBackground)
+                {
+                    await ctx.StdOut.WriteLineAsync($"[1] {p.Pid()}");
+
+                    _ = Task.Run(async () =>
+                    {
+                        await p.ExitTask;
+
+                        BackgroundJobStorage.Jobs.TryRemove(ctx.RawCommand, out var _);
+                    }, this.CancellationToken);
+
+                    BackgroundJobStorage.Jobs.TryAdd(ctx.RawCommand, true);
+                }
             });
         }
 
         return null;
     }
+
+    public required CliRawCommand RawCommand { get; set; }
 
     public required CancellationToken CancellationToken { get; init; }
 
@@ -67,77 +86,83 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
     }
 }
 
-public record ProcessDescriptor(int? Pid);
+public record ProcessDescriptor(Func<int?> Pid, Task ExitTask);
 
 public static class ProcessHelper
 {
-   public static async Task<ProcessDescriptor> RunProcess(bool inBg,
-    FileInfo c,
-    string[] args,
-    TextWriter stdOut,
-    TextWriter stdErr,
-    CancellationToken cancellationToken)
-{
-    var process = Process.Start(new ProcessStartInfo(c.Name, args)
+    public static async Task<ProcessDescriptor> RunProcess(bool inBg,
+        FileInfo c,
+        string[] args,
+        TextWriter stdOut,
+        TextWriter stdErr,
+        CancellationToken cancellationToken)
     {
-        UseShellExecute = false,
-        WorkingDirectory = c.DirectoryName!,
-        RedirectStandardError = true,
-        RedirectStandardOutput = true,
-    });
-
-    if (process is null)
-    {
-        return new ProcessDescriptor(null);
-    }
-
-    if (!inBg)
-    {
-        var ctr = cancellationToken.Register(() => 
+        var process = Process.Start(new ProcessStartInfo(c.Name, args)
         {
-            if (!process.HasExited) 
-            {
-                try { process.Kill(); } catch { /* Ignore if it just exited */ }
-            }
+            UseShellExecute = false,
+            WorkingDirectory = c.DirectoryName!,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
         });
-        
-        try
+
+        if (process is null)
         {
-            await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
-            {
-                var w = l.StandardError ? stdErr : stdOut;
-                await w.WriteLineAsync(l.Content);
-            }
-            await process.WaitForExitAsync(cancellationToken);
-        }
-        finally
-        {
-            await ctr.DisposeAsync();
-            process.Dispose();
+            return new ProcessDescriptor(() => null, Task.CompletedTask);
         }
 
-        return new ProcessDescriptor(null);
+        if (!inBg)
+        {
+            var ctr = cancellationToken.Register(() =>
+            {
+                if (!process.HasExited)
+                {
+                    try { process.Kill(); }
+                    catch
+                    {
+                        /* Ignore if it just exited */
+                    }
+                }
+            });
+
+            try
+            {
+                await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
+                {
+                    var w = l.StandardError ? stdErr : stdOut;
+                    await w.WriteLineAsync(l.Content);
+                }
+
+                await process.WaitForExitAsync(cancellationToken);
+            }
+            finally
+            {
+                await ctr.DisposeAsync();
+                process.Dispose();
+            }
+
+            return new ProcessDescriptor(() => null, Task.CompletedTask);
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
+                {
+                    var w = l.StandardError ? stdErr : stdOut;
+                    await w.WriteLineAsync(l.Content);
+                }
+
+                await process.WaitForExitAsync(cancellationToken);
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }, cancellationToken);
+
+        return new ProcessDescriptor(() => process.Id, process.WaitForExitAsync(cancellationToken));
     }
-
-    _ = Task.Run(async () =>
-    {
-        try
-        {
-            await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
-            {
-                var w = l.StandardError ? stdErr : stdOut;
-                await w.WriteLineAsync(l.Content);
-            }
-            await process.WaitForExitAsync(cancellationToken); 
-        }
-        finally
-        {
-            process.Dispose();
-        }
-    }, cancellationToken);
-
-    return new ProcessDescriptor(process.Id);
-}
 }
 
 public static class FileSystemHelper
