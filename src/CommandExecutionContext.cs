@@ -11,12 +11,14 @@
 
         foreach (var d in FileSystemHelper.GetPathDirectories())
         {
-            var c = d.EnumerateFiles($"{command}").FirstOrDefault();
+            var c = d.EnumerateFiles($"{command}.*").FirstOrDefault();
 
             if (c is null)
             {
                 continue;
             }
+
+            Console.WriteLine($"{c.UnixFileMode}");
 
             if (c.UnixFileMode.HasFlag(UnixFileMode.GroupExecute)
                 || c.UnixFileMode.HasFlag(UnixFileMode.OtherExecute)
