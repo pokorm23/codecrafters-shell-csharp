@@ -83,7 +83,7 @@ while (!cts.Token.IsCancellationRequested)
 
     userLine = userLine?.Trim() ?? string.Empty;
 
-    var arguments = userLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var arguments = CliParser.GetArgs(userLine);
 
     (var command, arguments) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
 
