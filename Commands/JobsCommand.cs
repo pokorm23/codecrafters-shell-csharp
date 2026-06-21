@@ -6,9 +6,13 @@ public record JobsCommand() : Command("jobs")
     {
         var jobs = BackgroundJobStorage.Jobs.ToDictionary();
 
-        foreach (var (i,(number,command)) in jobs.OrderBy(x => x.Key).Index())
+        foreach (var (i, (number, (command, p))) in jobs.OrderBy(x => x.Key).Index())
         {
-            var status = $" Running".PadRight(24, ' ');
+            var exited = p.Exited();
+
+            var status = exited ? "Done" : "Running";
+
+            status = $" {status}".PadRight(24, ' ');
 
             var lastness = i == jobs.Count - 1
                                ? "+"
@@ -16,6 +20,11 @@ public record JobsCommand() : Command("jobs")
                                    ? "-" : "";
 
             await ctx.StdOut.WriteLineAsync($"[{number}]{lastness} {status}{command.OriginalInput}");
+
+            if (exited)
+            {
+                BackgroundJobStorage.Jobs.TryRemove(number, out _);
+            }
         }
     }
 }
