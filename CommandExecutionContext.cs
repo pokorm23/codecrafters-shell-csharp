@@ -1,5 +1,6 @@
-﻿using System.Collections.Frozen;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+
+namespace CodeCrafters.Shell;
 
 public enum RedirectionType
 {

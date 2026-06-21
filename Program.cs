@@ -1,5 +1,6 @@
-using System.Collections.Frozen;
 using System.Text.RegularExpressions;
+using CodeCrafters.Shell;
+using CodeCrafters.Shell.Commands;
 
 var cts = new CancellationTokenSource();
 
@@ -9,66 +10,14 @@ Console.CancelKeyPress += (sender, e) =>
     cts.Cancel();
 };
 
-var wellKnownCommands = new List<ShellBuiltinCommand>
+var wellKnownCommands = new List<Command>
 {
-    new ("exit", ctx =>
-    {
-        ctx.Halt();
-
-        return Task.CompletedTask;
-    }),
-    new ("echo", async ctx =>
-    {
-        var echoLine = string.Join(" ", ctx.Args);
-
-        await ctx.StdOut.WriteLineAsync(echoLine);
-    }),
-    new ("type", async ctx =>
-    {
-        var what = ctx.Args.FirstOrDefault() ?? "";
-
-        var c = ctx.GetCommand(what);
-
-        if (c is null)
-        {
-            await ctx.StdOut.WriteLineAsync($"{what}: not found");
-        }
-        else if (c is ShellBuiltinCommand)
-        {
-            await ctx.StdOut.WriteLineAsync($"{what} is a shell builtin");
-        }
-        else if (c is PathFileCommand pf)
-        {
-            await ctx.StdOut.WriteLineAsync($"{what} is {pf.File.FullName}");
-        }
-        else
-        {
-            throw new NotImplementedException();
-        }
-    }),
-    new ("pwd", async ctx =>
-    {
-        await ctx.StdOut.WriteLineAsync(Environment.CurrentDirectory);
-    }),
-    new ("cd", async ctx =>
-    {
-        var path = ctx.Args.FirstOrDefault() ?? "";
-
-        if (path.StartsWith("~"))
-        {
-            var home = Environment.GetEnvironmentVariable("HOME") ?? "";
-            path = $"{home}{path[1..]}";
-        }
-
-        if (!Directory.Exists(path))
-        {
-            await ctx.StdOut.WriteLineAsync($"cd: {path}: No such file or directory");
-
-            return;
-        }
-
-        Environment.CurrentDirectory = path;
-    }),
+    new ExitCommand(),
+    new EchoCommand(),
+    new TypeCommand(),
+    new PwdCommand(),
+    new CdCommand(),
+    new JobsCommand(),
 };
 
 while (!cts.Token.IsCancellationRequested)
@@ -215,7 +164,7 @@ while (!cts.Token.IsCancellationRequested)
                 continue;
             }
 
-            await foundCommand.Callback(ctx);
+            await foundCommand.Handle(ctx);
 
             await (stdOut?.DisposeAsync() ?? ValueTask.CompletedTask);
             await (stdErr?.DisposeAsync() ?? ValueTask.CompletedTask);
@@ -234,8 +183,8 @@ while (!cts.Token.IsCancellationRequested)
     }
 }
 
-internal partial class Program
-{
-    [GeneratedRegex(@"^(?<r>\d*)(?<t>>|>>)$")]
-    private static partial Regex RedirectionPart();
+    internal partial class Program
+    {
+        [GeneratedRegex(@"^(?<r>\d*)(?<t>>|>>)$")]
+        private static partial Regex RedirectionPart();
 }
