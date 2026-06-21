@@ -71,41 +71,73 @@ public record ProcessDescriptor(int? Pid);
 
 public static class ProcessHelper
 {
-    public static async Task<ProcessDescriptor> RunProcess(bool inBg,
-        FileInfo c,
-        string[] args,
-        TextWriter stdOut,
-        TextWriter stdErr,
-        CancellationToken cancellationToken)
+   public static async Task<ProcessDescriptor> RunProcess(bool inBg,
+    FileInfo c,
+    string[] args,
+    TextWriter stdOut,
+    TextWriter stdErr,
+    CancellationToken cancellationToken)
+{
+    var process = Process.Start(new ProcessStartInfo(c.Name, args)
     {
-        using var process = Process.Start(new ProcessStartInfo(c.Name, args)
+        UseShellExecute = false,
+        WorkingDirectory = c.DirectoryName!,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+    });
+
+    if (process is null)
+    {
+        return new ProcessDescriptor(null);
+    }
+
+    if (!inBg)
+    {
+        var ctr = cancellationToken.Register(() => 
         {
-            UseShellExecute = false,
-            WorkingDirectory = c.DirectoryName!,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
+            if (!process.HasExited) 
+            {
+                try { process.Kill(); } catch { /* Ignore if it just exited */ }
+            }
         });
-
-        if (process is null)
-        {
-            return new ProcessDescriptor(null);
-        }
-
-        if (!inBg)
+        
+        try
         {
             await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
             {
                 var w = l.StandardError ? stdErr : stdOut;
-
                 await w.WriteLineAsync(l.Content);
             }
             await process.WaitForExitAsync(cancellationToken);
-
-            return new ProcessDescriptor(null);
+        }
+        finally
+        {
+            await ctr.DisposeAsync();
+            process.Dispose();
         }
 
-        return new ProcessDescriptor(process.Id);
+        return new ProcessDescriptor(null);
     }
+
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
+            {
+                var w = l.StandardError ? stdErr : stdOut;
+                await w.WriteLineAsync(l.Content);
+            }
+            await process.WaitForExitAsync(cancellationToken); 
+        }
+        finally
+        {
+            process.Dispose();
+        }
+    }, cancellationToken);
+
+    return new ProcessDescriptor(process.Id);
+}
 }
 
 public static class FileSystemHelper
