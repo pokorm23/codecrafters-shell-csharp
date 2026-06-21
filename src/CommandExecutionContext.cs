@@ -21,24 +21,33 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
             }
 
             if (!(c.UnixFileMode.HasFlag(UnixFileMode.GroupExecute)
-                || c.UnixFileMode.HasFlag(UnixFileMode.OtherExecute)
-                || c.UnixFileMode.HasFlag(UnixFileMode.UserExecute)))
+                  || c.UnixFileMode.HasFlag(UnixFileMode.OtherExecute)
+                  || c.UnixFileMode.HasFlag(UnixFileMode.UserExecute)))
             {
                 continue;
             }
 
             return new PathFileCommand(c, async ctx =>
             {
+                var pwd = Environment.CurrentDirectory;
+
                 Environment.CurrentDirectory = c.DirectoryName!;
-                
-                using var process = Process.Start(c.Name, ctx.Args);
 
-                /*await foreach (var l in process.ReadAllLinesAsync(cancellationToken: ctx.CancellationToken))
+                try
                 {
-                    Console.WriteLine(l.Content);
-                }*/
+                    using var process = Process.Start(c.Name, ctx.Args);
 
-                await process.WaitForExitAsync(ctx.CancellationToken);
+                    /*await foreach (var l in process.ReadAllLinesAsync(cancellationToken: ctx.CancellationToken))
+                    {
+                        Console.WriteLine(l.Content);
+                    }*/
+
+                    await process.WaitForExitAsync(ctx.CancellationToken);
+                }
+                finally
+                {
+                    Environment.CurrentDirectory = pwd;
+                }
             });
         }
 
