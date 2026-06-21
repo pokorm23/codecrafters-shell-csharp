@@ -12,7 +12,7 @@ public enum RedirectionType
 public static class BackgroundJobStorage
 {
     public static int CurrentJobNumber;
-    public static ConcurrentDictionary<int, CliRawCommand> Jobs { get; } = [];
+    public static ConcurrentDictionary<int, (CliRawCommand Command, ProcessDescriptor Process)> Jobs { get; } = [];
 }
 
 public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
@@ -59,14 +59,14 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
                     await ctx.StdOut.WriteLineAsync($"[{j}] {p.Pid()}");
 
-                    _ = Task.Run(async () =>
+                    /*_ = Task.Run(async () =>
                     {
                         await p.ExitTask;
 
                         BackgroundJobStorage.Jobs.TryRemove(j, out var _);
-                    }, this.CancellationToken);
+                    }, this.CancellationToken);*/
 
-                    BackgroundJobStorage.Jobs.TryAdd(j, ctx.RawCommand);
+                    BackgroundJobStorage.Jobs.TryAdd(j, (ctx.RawCommand, p));
                 }
             });
         }
@@ -90,7 +90,7 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
     }
 }
 
-public record ProcessDescriptor(Func<int?> Pid, Task ExitTask);
+public record ProcessDescriptor(Func<int?> Pid, Task ExitTask, Func<bool> Exited);
 
 public static class ProcessHelper
 {
@@ -111,7 +111,7 @@ public static class ProcessHelper
 
         if (process is null)
         {
-            return new ProcessDescriptor(() => null, Task.CompletedTask);
+            return new ProcessDescriptor(() => null, Task.CompletedTask, () => true);
         }
 
         if (!inBg)
@@ -144,7 +144,7 @@ public static class ProcessHelper
                 process.Dispose();
             }
 
-            return new ProcessDescriptor(() => null, Task.CompletedTask);
+            return new ProcessDescriptor(() => null, Task.CompletedTask, () => true);
         }
 
         _ = Task.Run(async () =>
@@ -165,7 +165,7 @@ public static class ProcessHelper
             }
         }, cancellationToken);
 
-        return new ProcessDescriptor(() => process.Id, process.WaitForExitAsync(cancellationToken));
+        return new ProcessDescriptor(() => process.Id, process.WaitForExitAsync(cancellationToken), () => process.HasExited);
     }
 }
 
