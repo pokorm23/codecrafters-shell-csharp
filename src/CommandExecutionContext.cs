@@ -11,7 +11,7 @@
 
         foreach (var d in FileSystemHelper.GetPathDirectories())
         {
-            var c = d.EnumerateFiles($"{command}.exe").FirstOrDefault();
+            var c = d.EnumerateFiles($"{command}.*").FirstOrDefault();
 
             if (c is null)
             {
@@ -52,7 +52,7 @@ public static class FileSystemHelper
     {
         var env = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
-        var dirs = env.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var dirs = env.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         foreach (var dir in dirs)
         {
