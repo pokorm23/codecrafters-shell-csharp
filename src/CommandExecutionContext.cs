@@ -35,8 +35,6 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
                 try
                 {
-                    Console.WriteLine($"Process: {c.Name} [{string.Join(", ", ctx.Args.Select(x => $"\"{x}\""))}]");
-                    
                     using var process = Process.Start(c.Name, ctx.Args);
 
                     /*await foreach (var l in process.ReadAllLinesAsync(cancellationToken: ctx.CancellationToken))

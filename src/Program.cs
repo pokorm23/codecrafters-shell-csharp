@@ -85,6 +85,8 @@ while (!cts.Token.IsCancellationRequested)
 
     var arguments = CliParser.GetArgs(userLine);
 
+    //Console.WriteLine($"[{string.Join(", ", arguments.Select(x => $"\"{x}\""))}]");
+
     (var command, arguments) = arguments is [var c, ..var a] ? (c, a) : (string.Empty, []);
 
     var ctx = new CommandExecutionContext(arguments, wellKnownCommands)
