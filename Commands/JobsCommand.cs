@@ -6,7 +6,7 @@ public record JobsCommand() : Command("jobs")
     {
         var jobs = BackgroundJobStorage.Jobs.ToDictionary();
 
-        foreach (var (i,(number,command)) in jobs.Order().Index())
+        foreach (var (i,(number,command)) in jobs.OrderBy(x => x.Key).Index())
         {
             var status = $" Running".PadRight(24, ' ');
 
