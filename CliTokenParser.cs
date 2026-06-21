@@ -2,7 +2,7 @@ using System.Text;
 
 namespace CodeCrafters.Shell;
 
-public static class CliParser
+public static class CliTokenParser
 {
     public const char TokenSplitChar = ' ';
     public const char SingleQuote = '\'';
@@ -10,9 +10,7 @@ public static class CliParser
     public const char EscapeChar = '\\';
     public const char DefaultChar = '\0';
 
-    public static string[] GetArgs(string line) => GetTokens(line).ToArray();
-
-    private static IEnumerable<string> GetTokens(string line)
+    public static IEnumerable<string> GetTokens(string line)
     {
         var nextCharToEscape = false;
         var quotes = DefaultChar;
