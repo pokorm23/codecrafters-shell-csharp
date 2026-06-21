@@ -11,6 +11,8 @@ Console.CancelKeyPress += (sender, e) =>
 
 while (!cts.Token.IsCancellationRequested)
 {
+    await BackgroundJobStorage.WriteAndReap(Console.Out, true);
+    
     Console.Write("$ ");
 
     var userLine = await Console.In.ReadLineAsync();
