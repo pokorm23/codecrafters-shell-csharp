@@ -58,6 +58,20 @@ public static class CommandHistoryStore
         }
     }
 
+    public static async Task Append()
+    {
+        var filePath = Environment.GetEnvironmentVariable("HISTFILE");
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return;
+        }
+
+        var file = new FileInfo(filePath);
+
+        await Append(file);
+    }
+
     public static async Task Append(FileInfo file)
     {
         await using var stream = file.Open(FileMode.Append, FileAccess.Write, FileShare.ReadWrite);

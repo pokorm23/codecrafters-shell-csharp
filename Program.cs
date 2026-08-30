@@ -4,11 +4,11 @@ using CodeCrafters.Shell.Commands;
 
 var cts = new CancellationTokenSource();
 
+await CommandHistoryStore.Load();
+
 while (!cts.Token.IsCancellationRequested)
 {
     await BackgroundJobStorage.WriteAndReap(Console.Out, true);
-
-    await CommandHistoryStore.Load();
 
     var (userLine, isCancel) = ConsoleLineReader.GetPrompt();
 
