@@ -5,10 +5,10 @@ namespace CodeCrafters.Shell;
 public static class BackgroundJobStorage
 {
     public static ConcurrentDictionary<int, (CliRawCommand Command, ProcessDescriptor Process)> Jobs { get; } = [];
-    
+
     public static async Task WriteAndReap(TextWriter writer, bool skipRunning)
     {
-        var jobs = BackgroundJobStorage.Jobs.ToDictionary();
+        var jobs = Jobs.ToDictionary();
 
         foreach (var (i, (number, (command, p))) in jobs.OrderBy(x => x.Key).Index())
         {
@@ -32,7 +32,7 @@ public static class BackgroundJobStorage
 
             if (exited)
             {
-                BackgroundJobStorage.Jobs.TryRemove(number, out _);
+                Jobs.TryRemove(number, out var _);
             }
         }
     }

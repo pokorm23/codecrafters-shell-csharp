@@ -1,25 +1,19 @@
+using System.Text;
 using CodeCrafters.Shell;
 using CodeCrafters.Shell.Commands;
 
 var cts = new CancellationTokenSource();
 
-Console.CancelKeyPress += (sender, e) =>
-{
-    e.Cancel = true;
-    cts.Cancel();
-};
-
 while (!cts.Token.IsCancellationRequested)
 {
     await BackgroundJobStorage.WriteAndReap(Console.Out, true);
 
-    await Console.Out.WriteAsync("$ ");
+    var (userLine, isCancel) = ConsoleLineReader.GetPrompt();
 
-    var userLine = await Console.In.ReadLineAsync();
-
-    userLine = userLine?.Trim() ?? string.Empty;
-    
-    CommandHistoryStore.Commands.Add(userLine);
+    if (isCancel)
+    {
+        cts.Cancel();
+    }
 
     var allParsedArguments = CliTokenParser.GetTokens(userLine);
 
