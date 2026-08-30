@@ -92,7 +92,12 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
             return new PathFileCommand(c, async ctx =>
             {
-                var p = await ProcessHelper.RunProcess(c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
+                var p = await ProcessHelper.RunProcess(c,
+                            ctx.Args,
+                            ctx.StdOut,
+                            ctx.StdErr,
+                            ctx.RedirectStdIn,
+                            ctx.CancellationToken);
 
                 ctx.SetStdIn(p.StdIn());
  
@@ -149,6 +154,8 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
         }
     }
 
+    public bool RedirectStdIn { get; set; }
+
     public IDisposable OnStdInCaptured(Action<TextWriter?> callback)
     {
         return new Unsubscriber(this, callback);
@@ -199,13 +206,14 @@ public static class ProcessHelper
         string[] args,
         TextWriter stdOut,
         TextWriter stdErr,
+        bool redirectStdIn,
         CancellationToken cancellationToken)
     {
         var process = Process.Start(new ProcessStartInfo(c.Name, args)
         {
             UseShellExecute = false,
             WorkingDirectory = Environment.CurrentDirectory,
-            RedirectStandardInput = true,
+            RedirectStandardInput = redirectStdIn,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
         });
@@ -215,7 +223,7 @@ public static class ProcessHelper
             return new ProcessDescriptor(() => null, Task.CompletedTask, () => true, () => null);
         }
 
-        _ = Task.Run(async () =>
+        var processTask = Task.Run(async () =>
         {
             var ctr = cancellationToken.Register(() =>
             {
@@ -244,19 +252,21 @@ public static class ProcessHelper
                 await ctr.DisposeAsync();
                 process.Dispose();
             }
-        }, cancellationToken);
+        });
 
-        return new ProcessDescriptor(() => process.Id, process.WaitForExitAsync(cancellationToken), () =>
-        {
-            try
+        return new ProcessDescriptor(() => process.Id,
+             processTask,
+            () =>
             {
-                return process.HasExited;
-            }
-            catch
-            {
-                return true;
-            }
-        }, () =>
+                 try
+                 {
+                     return process.HasExited;
+                 }
+                 catch
+                 {
+                     return true;
+                 }
+             }, () =>
         {
             try
             {

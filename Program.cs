@@ -12,8 +12,8 @@ Console.CancelKeyPress += (sender, e) =>
 while (!cts.Token.IsCancellationRequested)
 {
     await BackgroundJobStorage.WriteAndReap(Console.Out, true);
-    
-    Console.Write("$ ");
+
+    await Console.Out.WriteAsync("$ ");
 
     var userLine = await Console.In.ReadLineAsync();
 
@@ -51,14 +51,21 @@ while (!cts.Token.IsCancellationRequested)
 
             var tsc = new TaskCompletionSource<TextWriter?>();
 
-            var @out = stdOut;
+            var localStdOut = stdOut;
 
             var pipeTask = Task.Run(async () =>
             {
+                Action<TextWriter?>? ca = i > 0 ? tsc.SetResult : null;
+                
                 var ctx = await RunCommand(rawCommand,
-                              @out,
-                              tsc.SetResult,
+                              localStdOut,
+                              ca,
                               cts.Token);
+
+                if (localStdOut is not null)
+                {
+                    await localStdOut.DisposeAsync();
+                }
 
                 if (ctx.IsHaltRequested)
                 {
@@ -69,6 +76,7 @@ while (!cts.Token.IsCancellationRequested)
             tasks.Add(pipeTask);
 
             // need to wait for available stdIn from other process
+            if (i > 0)
             stdOut = await tsc.Task;
         }
         
@@ -132,6 +140,7 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
             CancellationToken = cancellationToken,
             StdOut = stdOut ?? Console.Out,
             StdErr = stdErr ?? Console.Error,
+            RedirectStdIn = onStdInCapture is not null,
             InBackground = rawCommand.IsBackground,
         };
 
