@@ -15,7 +15,12 @@ public record DeclareCommand() : Command("declare")
                 var name = parts[0];
                 var value = parts[1];
 
-                VariableStore.Set(name, value);
+                var s = VariableStore.Set(name, value);
+
+                if (!s)
+                {
+                    await ctx.StdOut.WriteLineAsync($"declare: `{arg}': not a valid identifier");
+                }
             }
         }
 
