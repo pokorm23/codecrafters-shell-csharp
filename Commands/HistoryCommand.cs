@@ -35,17 +35,35 @@ public record HistoryCommand() : Command("history")
                 }
             }
 
-            if (option == "-w" || option == "-a")
+            if (option == "-w")
             {
-                var mode = option == "-w" ? FileMode.Create : FileMode.Append;
-                
-                await using var stream = file.Open(mode, FileAccess.Write, FileShare.ReadWrite);
+                await using var stream = file.Open(FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
                 await using var writer = new StreamWriter(stream);
-                
+
                 foreach (var m in CommandHistoryStore.Commands)
                 {
                     await writer.WriteLineAsync(m);
                 }
+            }
+
+            if (option == "-a")
+            {
+                await using var stream = file.Open(FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                await using var writer = new StreamWriter(stream);
+
+                var commands = CommandHistoryStore.Commands;
+
+                if (CommandHistoryStore.LastAppendedIndex.HasValue)
+                {
+                    commands = commands.Skip(CommandHistoryStore.LastAppendedIndex.Value + 1).ToList();
+                }
+
+                foreach (var m in commands)
+                {
+                    await writer.WriteLineAsync(m);
+                }
+
+                CommandHistoryStore.LastAppendedIndex = commands.Count - 1;
             }
         }
     }
