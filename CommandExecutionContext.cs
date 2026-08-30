@@ -57,8 +57,6 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
     public required bool InBackground { get; init; }
 
-    public required bool DeferedInput { get; init; }
-
     public Command? GetCommand(string command)
     {
         if (GetKnownCommand(command) is { } kc)
@@ -84,18 +82,11 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
             return new PathFileCommand(c, async ctx =>
             {
-                var p = await ProcessHelper.RunProcess(ctx.InBackground || ctx.DeferedInput, c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
+                var p = await ProcessHelper.RunProcess(ctx.InBackground, c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
 
-                if (ctx.DeferedInput)
+                if (p.StdIn() is { } processStdIn)
                 {
-                    if (p.StdIn() is { } i)
-                    {
-                        ctx.SetStdIn(i);
-                    }
-                    else
-                    {
-                        throw new Exception("unable to get std in");
-                    }
+                    ctx.SetStdIn(processStdIn);
                 }
  
                 if (ctx.InBackground)

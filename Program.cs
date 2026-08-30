@@ -28,6 +28,8 @@ while (!cts.Token.IsCancellationRequested)
         var pipe = CliPipeParser.GetCommandPipe(allArgs);
 
         var isPipe = pipe.Count > 1;
+
+        TextWriter? stdOut = null;
         
         foreach (var (i, arguments) in pipe.Index().Reverse())
         {
@@ -43,24 +45,15 @@ while (!cts.Token.IsCancellationRequested)
 
                 throw;
             }
-            
-            CommandExecutionContext ctx;
-            
-            // if is pipe
-            if (i > 0)
-            {
-                ctx = await RunCommand(rawCommand, cts.Token);
-            }
-            else
-            {
-                ctx = await RunCommand(rawCommand, cts.Token);
-            }
 
+            var ctx = await RunCommand(rawCommand, stdOut, cts.Token);
 
             if (ctx.IsHaltRequested)
             {
                 return;
             }
+
+            stdOut = ctx.StdIn;
 
             pipePrevContext = ctx;
         }
@@ -77,7 +70,7 @@ static List<Command> GetWellKnownCommands() => new ()
     new JobsCommand(),
 };
 
-static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, TextWriter? nextStdOut,TextReader? previousStdIn, CancellationToken cancellationToken)
+static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, TextWriter? nextStdOut, CancellationToken cancellationToken)
 {
     TextWriter? stdOut = null;
     TextWriter? stdErr = null;
