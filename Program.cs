@@ -101,6 +101,7 @@ static List<Command> GetWellKnownCommands() => new ()
     new CdCommand(),
     new JobsCommand(),
     new HistoryCommand(),
+    new DeclareCommand(),
 };
 
 static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
