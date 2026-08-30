@@ -33,7 +33,7 @@ while (!cts.Token.IsCancellationRequested)
         TextWriter? stdOut = null;
 
         var tasks = new List<Task>();
-        
+
         foreach (var (i, arguments) in pipe.Index().Reverse())
         {
             CliRawCommand rawCommand;
@@ -56,7 +56,7 @@ while (!cts.Token.IsCancellationRequested)
             var pipeTask = Task.Run(async () =>
             {
                 Action<TextWriter?>? ca = i > 0 ? tsc.SetResult : null;
-                
+
                 var ctx = await RunCommand(rawCommand,
                               localStdOut,
                               ca,
@@ -71,15 +71,22 @@ while (!cts.Token.IsCancellationRequested)
                 {
                     haltRequested = true;
                 }
+
+                if (!tsc.Task.IsCompleted)
+                {
+                    tsc.TrySetResult(TextWriter.Null);
+                }
             });
-            
+
             tasks.Add(pipeTask);
 
             // need to wait for available stdIn from other process
             if (i > 0)
-            stdOut = await tsc.Task;
+            {
+                stdOut = await tsc.Task;
+            }
         }
-        
+
         await Task.WhenAll(tasks);
 
         if (haltRequested)
@@ -96,7 +103,7 @@ static List<Command> GetWellKnownCommands() => new ()
     new TypeCommand(),
     new PwdCommand(),
     new CdCommand(),
-    new JobsCommand(),
+    new JobsCommand()
 };
 
 static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
@@ -120,7 +127,7 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
             {
                 RedirectionType.Append   => FileMode.Append,
                 RedirectionType.Override => FileMode.Create,
-                var _                    => throw new ArgumentOutOfRangeException(),
+                var _                    => throw new ArgumentOutOfRangeException()
             }, FileAccess.Write));
         }
 
@@ -130,7 +137,7 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
             {
                 RedirectionType.Append   => FileMode.Append,
                 RedirectionType.Override => FileMode.Create,
-                _                        => throw new ArgumentOutOfRangeException()
+                var _                    => throw new ArgumentOutOfRangeException()
             }, FileAccess.Write));
         }
 
@@ -141,12 +148,12 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
             StdOut = stdOut ?? Console.Out,
             StdErr = stdErr ?? Console.Error,
             RedirectStdIn = onStdInCapture is not null,
-            InBackground = rawCommand.IsBackground,
+            InBackground = rawCommand.IsBackground
         };
 
         if (onStdInCapture is not null)
         {
-            stdInCaptureSub=ctx.OnStdInCaptured(onStdInCapture);
+            stdInCaptureSub = ctx.OnStdInCaptured(onStdInCapture);
         }
 
         var foundCommand = ctx.GetCommand(rawCommand.Command);
@@ -154,7 +161,7 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
         if (foundCommand is null)
         {
             await ctx.StdOut.WriteLineAsync($"{rawCommand.Command}: command not found");
-            
+
             onStdInCapture?.Invoke(null);
 
             return ctx;
