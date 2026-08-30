@@ -33,7 +33,19 @@ public static class CommandHistoryStore
         }
     }
 
-    public static async Task Save() { }
+    public static async Task Save()
+    {
+        var filePath = Environment.GetEnvironmentVariable("HISTFILE");
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return;
+        }
+
+        var file = new FileInfo(filePath);
+
+        await Save(file);
+    }
 
     public static async Task Save(FileInfo file)
     {
