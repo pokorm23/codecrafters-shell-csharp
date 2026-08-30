@@ -25,45 +25,19 @@ public record HistoryCommand() : Command("history")
             var option = ctx.Args[0].Trim();
             var file = new FileInfo(ctx.Args[1].Trim());
 
-            if (option == "-r" && file.Exists)
+            if (option == "-r")
             {
-                var historyToRead = await File.ReadAllLinesAsync(file.FullName);
-
-                foreach (var se in historyToRead.Where(s => !string.IsNullOrWhiteSpace(s)))
-                {
-                    CommandHistoryStore.Commands.Add(se);
-                }
+                await CommandHistoryStore.Load(file);
             }
 
             if (option == "-w")
             {
-                await using var stream = file.Open(FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
-                await using var writer = new StreamWriter(stream);
-
-                foreach (var m in CommandHistoryStore.Commands)
-                {
-                    await writer.WriteLineAsync(m);
-                }
+                await CommandHistoryStore.Save(file);
             }
 
             if (option == "-a")
             {
-                await using var stream = file.Open(FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                await using var writer = new StreamWriter(stream);
-
-                var commands = CommandHistoryStore.Commands;
-
-                if (CommandHistoryStore.LastAppendedIndex.HasValue)
-                {
-                    commands = commands.Skip(CommandHistoryStore.LastAppendedIndex.Value + 1).ToList();
-                }
-
-                foreach (var m in commands)
-                {
-                    await writer.WriteLineAsync(m);
-                }
-
-                CommandHistoryStore.LastAppendedIndex = commands.Count - 1;
+                await CommandHistoryStore.Append(file);
             }
         }
     }

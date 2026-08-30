@@ -8,6 +8,8 @@ while (!cts.Token.IsCancellationRequested)
 {
     await BackgroundJobStorage.WriteAndReap(Console.Out, true);
 
+    await CommandHistoryStore.Load();
+
     var (userLine, isCancel) = ConsoleLineReader.GetPrompt();
 
     if (isCancel)
