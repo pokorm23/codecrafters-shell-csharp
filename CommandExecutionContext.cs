@@ -7,7 +7,6 @@ public enum RedirectionType
 {
     Override,
     Append,
-    Pipe,
 }
 
 public static class BackgroundJobStorage
@@ -48,7 +47,7 @@ public static class BackgroundJobStorage
 
 public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command> AllCommands)
 {
-    public TextWriter? StdIn { get; private set; }
+    private TextWriter? StdIn { get;  set; }
     public bool IsHaltRequested { get; private set; }
 
     public required TextWriter StdOut { get; init; }
@@ -66,7 +65,18 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
         foreach (var d in FileSystemHelper.GetPathDirectories())
         {
-            var c = d.EnumerateFiles($"{command}").FirstOrDefault();
+            FileInfo? c;
+
+            try
+            {
+                c = d.EnumerateFiles($"{command}").FirstOrDefault();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Cannot enumerate search pattern: '{command}' in {d.FullName}: {e.Message}");
+
+                throw;
+            }
 
             if (c is null)
             {
@@ -82,12 +92,9 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
             return new PathFileCommand(c, async ctx =>
             {
-                var p = await ProcessHelper.RunProcess(ctx.InBackground, c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
+                var p = await ProcessHelper.RunProcess(c, ctx.Args, ctx.StdOut, ctx.StdErr, ctx.CancellationToken);
 
-                if (p.StdIn() is { } processStdIn)
-                {
-                    ctx.SetStdIn(processStdIn);
-                }
+                ctx.SetStdIn(p.StdIn());
  
                 if (ctx.InBackground)
                 {
@@ -122,15 +129,50 @@ public record CommandExecutionContext(string[] Args, IReadOnlyCollection<Command
 
                     BackgroundJobStorage.Jobs.TryAdd(j, (ctx.RawCommand, p));
                 }
+                else
+                {
+                    await p.ExitTask;
+                }
             });
         }
 
         return null;
     }
 
-    private void SetStdIn(TextWriter textWriter)
+    private void SetStdIn(TextWriter? textWriter)
     {
         StdIn = textWriter;
+
+        foreach (var action in this.stdInCaptureCallbacks)
+        {
+            action(textWriter);
+        }
+    }
+
+    public IDisposable OnStdInCaptured(Action<TextWriter?> callback)
+    {
+        return new Unsubscriber(this, callback);
+    }
+
+    private List<Action<TextWriter?>> stdInCaptureCallbacks = [];
+
+    private class Unsubscriber : IDisposable
+    {
+        private readonly CommandExecutionContext parent;
+        private readonly Action<TextWriter?> callback;
+
+        public Unsubscriber(CommandExecutionContext parent, Action<TextWriter?> callback)
+        {
+            this.parent = parent;
+            this.callback = callback;
+            
+            this.parent.stdInCaptureCallbacks.Add(callback);
+        }
+        
+        public void Dispose()
+        {
+            this.parent.stdInCaptureCallbacks.Remove(this.callback);
+        }
     }
 
     public required CliRawCommand RawCommand { get; set; }
@@ -153,8 +195,7 @@ public record ProcessDescriptor(Func<int?> Pid, Task ExitTask, Func<bool> Exited
 
 public static class ProcessHelper
 {
-    public static async Task<ProcessDescriptor> RunProcess(bool inBg,
-        FileInfo c,
+    public static async Task<ProcessDescriptor> RunProcess(FileInfo c,
         string[] args,
         TextWriter stdOut,
         TextWriter stdErr,
@@ -163,7 +204,8 @@ public static class ProcessHelper
         var process = Process.Start(new ProcessStartInfo(c.Name, args)
         {
             UseShellExecute = false,
-            WorkingDirectory = c.DirectoryName!,
+            WorkingDirectory = Environment.CurrentDirectory,
+            RedirectStandardInput = true,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
         });
@@ -173,7 +215,7 @@ public static class ProcessHelper
             return new ProcessDescriptor(() => null, Task.CompletedTask, () => true, () => null);
         }
 
-        if (!inBg)
+        _ = Task.Run(async () =>
         {
             var ctr = cancellationToken.Register(() =>
             {
@@ -186,7 +228,7 @@ public static class ProcessHelper
                     }
                 }
             });
-
+            
             try
             {
                 await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
@@ -200,26 +242,6 @@ public static class ProcessHelper
             finally
             {
                 await ctr.DisposeAsync();
-                process.Dispose();
-            }
-
-            return new ProcessDescriptor(() => null, Task.CompletedTask, () => true, () => null);
-        }
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await foreach (var l in process.ReadAllLinesAsync(cancellationToken))
-                {
-                    var w = l.StandardError ? stdErr : stdOut;
-                    await w.WriteLineAsync(l.Content);
-                }
-
-                await process.WaitForExitAsync(cancellationToken);
-            }
-            finally
-            {
                 process.Dispose();
             }
         }, cancellationToken);

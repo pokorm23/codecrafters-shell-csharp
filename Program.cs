@@ -28,8 +28,11 @@ while (!cts.Token.IsCancellationRequested)
         var pipe = CliPipeParser.GetCommandPipe(allArgs);
 
         var isPipe = pipe.Count > 1;
+        var haltRequested = false;
 
         TextWriter? stdOut = null;
+
+        var tasks = new List<Task>();
         
         foreach (var (i, arguments) in pipe.Index().Reverse())
         {
@@ -46,16 +49,34 @@ while (!cts.Token.IsCancellationRequested)
                 throw;
             }
 
-            var ctx = await RunCommand(rawCommand, stdOut, cts.Token);
+            var tsc = new TaskCompletionSource<TextWriter?>();
 
-            if (ctx.IsHaltRequested)
+            var @out = stdOut;
+
+            var pipeTask = Task.Run(async () =>
             {
-                return;
-            }
+                var ctx = await RunCommand(rawCommand,
+                              @out,
+                              tsc.SetResult,
+                              cts.Token);
 
-            stdOut = ctx.StdIn;
+                if (ctx.IsHaltRequested)
+                {
+                    haltRequested = true;
+                }
+            });
+            
+            tasks.Add(pipeTask);
 
-            pipePrevContext = ctx;
+            // need to wait for available stdIn from other process
+            stdOut = await tsc.Task;
+        }
+        
+        await Task.WhenAll(tasks);
+
+        if (haltRequested)
+        {
+            return;
         }
     }
 }
@@ -70,28 +91,29 @@ static List<Command> GetWellKnownCommands() => new ()
     new JobsCommand(),
 };
 
-static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, TextWriter? nextStdOut, CancellationToken cancellationToken)
+static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
+    TextWriter? nextStdOut,
+    Action<TextWriter?>? onStdInCapture,
+    CancellationToken cancellationToken)
 {
     TextWriter? stdOut = null;
     TextWriter? stdErr = null;
+    IDisposable? stdInCaptureSub = null;
 
     try
     {
-        if (rawCommand.Redirections.TryGetValue(1, out var re))
+        if (nextStdOut is not null)
         {
-            if (re.Type == RedirectionType.Pipe)
+            stdOut = nextStdOut;
+        }
+        else if (rawCommand.Redirections.TryGetValue(1, out var re))
+        {
+            stdOut = new StreamWriter(File.Open(re.Target, re.Type switch
             {
-                stdOut = nextStdOut;
-            }
-            else
-            {
-                stdOut = new StreamWriter(File.Open(re.Target, re.Type switch
-                {
-                    RedirectionType.Append   => FileMode.Append,
-                    RedirectionType.Override => FileMode.Create,
-                    var _                    => throw new ArgumentOutOfRangeException(),
-                }, FileAccess.Write));
-            }
+                RedirectionType.Append   => FileMode.Append,
+                RedirectionType.Override => FileMode.Create,
+                var _                    => throw new ArgumentOutOfRangeException(),
+            }, FileAccess.Write));
         }
 
         if (rawCommand.Redirections.TryGetValue(2, out var se))
@@ -113,11 +135,18 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, 
             InBackground = rawCommand.IsBackground,
         };
 
+        if (onStdInCapture is not null)
+        {
+            stdInCaptureSub=ctx.OnStdInCaptured(onStdInCapture);
+        }
+
         var foundCommand = ctx.GetCommand(rawCommand.Command);
 
         if (foundCommand is null)
         {
             await ctx.StdOut.WriteLineAsync($"{rawCommand.Command}: command not found");
+            
+            onStdInCapture?.Invoke(null);
 
             return ctx;
         }
@@ -132,7 +161,13 @@ static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand, 
     }
     finally
     {
-        await (stdOut?.DisposeAsync() ?? ValueTask.CompletedTask);
+        // dispose only if we own the stdout
+        if (nextStdOut is null)
+        {
+            await (stdOut?.DisposeAsync() ?? ValueTask.CompletedTask);
+        }
+
         await (stdErr?.DisposeAsync() ?? ValueTask.CompletedTask);
+        stdInCaptureSub?.Dispose();
     }
 }
