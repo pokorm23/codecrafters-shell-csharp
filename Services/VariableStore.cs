@@ -24,5 +24,8 @@ public static class VariableStore
         return true;
     }
 
-    public static string? Get(string varName) => Variables[varName];
+    public static string? Get(string varName)
+    {
+        return Variables.GetValueOrDefault(varName);
+    }
 }
