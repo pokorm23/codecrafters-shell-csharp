@@ -18,16 +18,15 @@ while (!cts.Token.IsCancellationRequested)
     var userLine = await Console.In.ReadLineAsync();
 
     userLine = userLine?.Trim() ?? string.Empty;
+    
+    CommandHistoryStore.Commands.Add(userLine);
 
     var allParsedArguments = CliTokenParser.GetTokens(userLine);
 
     foreach (var (_, allArgs) in CliPipeParser.GetCommandGroups(allParsedArguments.ToArray()))
     {
-        CommandExecutionContext? pipePrevContext = null;
-
         var pipe = CliPipeParser.GetCommandPipe(allArgs);
 
-        var isPipe = pipe.Count > 1;
         var haltRequested = false;
 
         TextWriter? stdOut = null;
@@ -104,7 +103,8 @@ static List<Command> GetWellKnownCommands() => new ()
     new TypeCommand(),
     new PwdCommand(),
     new CdCommand(),
-    new JobsCommand()
+    new JobsCommand(),
+    new HistoryCommand(),
 };
 
 static async Task<CommandExecutionContext> RunCommand(CliRawCommand rawCommand,
