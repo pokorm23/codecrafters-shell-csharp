@@ -78,7 +78,14 @@ public static partial class CliCommandParser
                 throw new Exception("missing target for previous redirect");
             }
 
-            arguments.Add(a);
+            var expandedArgument = a;
+
+            if (a.Length > 1 && a.StartsWith('$') && VariableStore.Get(a[1..]) is { } v)
+            {
+                expandedArgument = v;
+            }
+
+            arguments.Add(expandedArgument);
         }
 
         var validatedRedirections = redirections
