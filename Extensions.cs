@@ -75,5 +75,3 @@ public static class Extensions
         }
     }
 }
-
-public record ProcessOutputLine(string Content, bool StandardError);

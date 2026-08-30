@@ -72,6 +72,7 @@ while (!cts.Token.IsCancellationRequested)
                     haltRequested = true;
                 }
 
+                // if not completed capturing stdin, set no-op writer
                 if (!tsc.Task.IsCompleted)
                 {
                     tsc.TrySetResult(TextWriter.Null);
