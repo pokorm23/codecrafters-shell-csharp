@@ -6,14 +6,14 @@ public static class VariableStore
 
     public static bool Set(string name, string value)
     {
-        if (value.Length > 0)
+        if (name.Length > 0)
         {
-            if (!char.IsAsciiLetter(value[0]) && value[0] != '_')
+            if (!char.IsAsciiLetter(name[0]) && name[0] != '_')
             {
                 return false;
             }
 
-            if (value.Length > 1 && value[1..].Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
+            if (name.Length > 1 && name[1..].Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
             {
                 return false;
             }
